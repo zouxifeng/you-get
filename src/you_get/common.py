@@ -1062,12 +1062,13 @@ def script_main(script_name, download, download_playlist, **kwargs):
     -c | --cookies <COOKIES_FILE>       Load cookies.txt or cookies.sqlite.
     -x | --http-proxy <HOST:PORT>       Use an HTTP proxy for downloading.
     -y | --extractor-proxy <HOST:PORT>  Use an HTTP proxy for extracting only.
+    -s | --socks5-proxy <HOST:PORT>     Use an socks5 proxy for both downloading and extracting.
          --no-proxy                     Never use a proxy.
     -d | --debug                        Show traceback and other debug info.
     '''
 
-    short_opts = 'Vhfiuc:ndF:O:o:p:x:y:'
-    opts = ['version', 'help', 'force', 'info', 'url', 'cookies', 'no-caption', 'no-merge', 'no-proxy', 'debug', 'json', 'format=', 'stream=', 'itag=', 'output-filename=', 'output-dir=', 'player=', 'http-proxy=', 'extractor-proxy=', 'lang=']
+    short_opts = 'Vhfiuc:ndF:O:o:p:x:y:s:'
+    opts = ['version', 'help', 'force', 'info', 'url', 'cookies', 'no-caption', 'no-merge', 'no-proxy', 'debug', 'json', 'format=', 'stream=', 'itag=', 'output-filename=', 'output-dir=', 'player=', 'http-proxy=', 'extractor-proxy=', 'lang=', 'socks5-proxy=']
     if download_playlist:
         short_opts = 'l' + short_opts
         opts = ['playlist'] + opts
@@ -1096,6 +1097,7 @@ def script_main(script_name, download, download_playlist, **kwargs):
     output_dir = '.'
     proxy = None
     extractor_proxy = None
+    socks_proxy = None
     traceback = False
     for o, a in opts:
         if o in ('-V', '--version'):
@@ -1170,6 +1172,9 @@ def script_main(script_name, download, download_playlist, **kwargs):
             extractor_proxy = a
         elif o in ('--lang',):
             lang = a
+        elif o in ('-s', '--socks5-proxy'):
+            socks_proxy = a
+            extractor_proxy = None
         else:
             log.e("try 'you-get --help' for more options")
             sys.exit(2)
@@ -1177,7 +1182,10 @@ def script_main(script_name, download, download_playlist, **kwargs):
         print(help)
         sys.exit()
 
-    set_http_proxy(proxy)
+    if socks_proxy:
+      set_socks5_proxy(socks_proxy)
+    else:
+      set_http_proxy(proxy)
 
     try:
         if stream_id:
@@ -1275,3 +1283,21 @@ def any_download_playlist(url, **kwargs):
 
 def main(**kwargs):
     script_main('you-get', any_download, any_download_playlist, **kwargs)
+
+def set_socks5_proxy(socks_proxy):
+    from .proxy import socks
+    from .proxy.sockshandler import SocksiPyHandler
+    opener = None
+    if socks_proxy == None: # Use system default setting
+        proxy_support = request.ProxyHandler()
+    elif socks_proxy == '': # Don't use any proxy
+        proxy_support = request.ProxyHandler({})
+    else: # Use proxy
+        host, port = parse_host(socks_proxy)
+        opener = request.build_opener(SocksiPyHandler(socks.SOCKS5, host, port))
+
+    if opener is None:
+      opener = request.build_opener(proxy_support)
+    request.install_opener(opener)
+
+
